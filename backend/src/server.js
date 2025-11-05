@@ -33,6 +33,10 @@ if (process.env.NODE_ENV === 'development') {
 // Rate limiting
 app.use('/api', apiLimiter);
 
+// Swagger Documentation
+const swagger = require('./config/swagger');
+app.use('/api-docs', swagger.serve, swagger.setup);
+
 // Routes
 app.use('/api', routes);
 
