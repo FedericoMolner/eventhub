@@ -1,9 +1,119 @@
-// backend/src/models/index.js
+const fs = require('fs');
+const path = require('path');
+const Sequelize = require('sequelize');
+const config = require('../config/server.config');
+
+const db = {};
+
+// Configurazione della connessione al database
+const sequelize = new Sequelize(
+
+  config.database.name,
+  config.database.user,
+  config.database.password,
+  {
+    host: config.database.host,
+    port: config.database.port,
+    dialect: config.database.dialect,
+    logging: config.database.logging,
+    pool: config.database.pool
+  }
+);
+
+// Caricamento automatico dei modelli
+const modelFiles = fs.readdirSync(__dirname)
+  .filter(file => {
+    return (
+      file.indexOf('.') !== 0 &&
+      file !== 'index.js' &&
+      file.slice(-9) === '.model.js'
+    );
+  });
+
+for (const file of modelFiles) {
+  const model = require(path.join(__dirname, file))(sequelize);
+  db[model.name] = model;
+}
+
+// Configurazione delle associazioni tra i modelli
+Object.keys(db).forEach(modelName => {
+  if (db[modelName].associate) {
+    db[modelName].associate(db);
+  }
+});
+
+// Definizione delle associazioni
+// User - Event (come organizzatore)
+db.User.hasMany(db.Event, {
+  foreignKey: 'organizerId',
+  as: 'organizedEvents'
+});
+db.Event.belongsTo(db.User, {
+  foreignKey: 'organizerId',
+  as: 'organizer'
+});
+
+// User - Event (come partecipante)
+db.User.belongsToMany(db.Event, {
+  through: db.EventParticipation,
+  foreignKey: 'userId',
+  as: 'participatedEvents'
+});
+db.Event.belongsToMany(db.User, {
+  through: db.EventParticipation,
+  foreignKey: 'eventId',
+  as: 'participants'
+});
+
+// Event - EventParticipation
+db.Event.hasMany(db.EventParticipation, {
+  foreignKey: 'eventId',
+  as: 'participations'
+});
+db.EventParticipation.belongsTo(db.Event, {
+  foreignKey: 'eventId',
+  as: 'event'
+});
+
+// User - EventParticipation
+db.User.hasMany(db.EventParticipation, {
+  foreignKey: 'userId',
+  as: 'participations'
+});
+db.EventParticipation.belongsTo(db.User, {
+  foreignKey: 'userId',
+  as: 'user'
+});
+
+// Event - ChatMessage
+db.Event.hasMany(db.ChatMessage, {
+  foreignKey: 'eventId',
+  as: 'chatMessages'
+});
+db.ChatMessage.belongsTo(db.Event, {
+  foreignKey: 'eventId',
+  as: 'event'
+});
+
+// User - ChatMessage
+db.User.hasMany(db.ChatMessage, {
+  foreignKey: 'userId',
+  as: 'messages'
+});
+db.ChatMessage.belongsTo(db.User, {
+  foreignKey: 'userId',
+  as: 'user'
+});
+
+db.sequelize = sequelize;
+db.Sequelize = Sequelize;
+
+module.exports = db;// backend/src/models/index.js
 const { Sequelize } = require('sequelize');
 const config = require('../config/database');
 
 // Inizializza Sequelize
-const sequelize = new Sequelize(config);
+// sequelize already declared above – skip re-declaration
 
 // Importa i modelli
 const User = require('./User')(sequelize);
