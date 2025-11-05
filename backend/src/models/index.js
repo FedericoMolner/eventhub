@@ -1,159 +1,21 @@
-const fs = require('fs');
-const path = require('path');
-const Sequelize = require('sequelize');
-const config = require('../config/server.config');
-
-const db = {};
-
-// Configurazione della connessione al database
-const sequelize = new Sequelize(
-
-  config.database.name,
-  config.database.user,
-  config.database.password,
-  {
-    host: config.database.host,
-    port: config.database.port,
-    dialect: config.database.dialect,
-    logging: config.database.logging,
-    pool: config.database.pool
-  }
-);
-
-// Caricamento automatico dei modelli
-const modelFiles = fs.readdirSync(__dirname)
-  .filter(file => {
-    return (
-      file.indexOf('.') !== 0 &&
-      file !== 'index.js' &&
-      file.slice(-9) === '.model.js'
-    );
-  });
-
-for (const file of modelFiles) {
-  const model = require(path.join(__dirname, file))(sequelize);
-  db[model.name] = model;
-}
-
-// Configurazione delle associazioni tra i modelli
-Object.keys(db).forEach(modelName => {
-  if (db[modelName].associate) {
-    db[modelName].associate(db);
-  }
-});
-
-// Definizione delle associazioni
-// User - Event (come organizzatore)
-db.User.hasMany(db.Event, {
-  foreignKey: 'organizerId',
-  as: 'organizedEvents'
-});
-db.Event.belongsTo(db.User, {
-  foreignKey: 'organizerId',
-  as: 'organizer'
-});
-
-// User - Event (come partecipante)
-db.User.belongsToMany(db.Event, {
-  through: db.EventParticipation,
-  foreignKey: 'userId',
-  as: 'participatedEvents'
-});
-db.Event.belongsToMany(db.User, {
-  through: db.EventParticipation,
-  foreignKey: 'eventId',
-  as: 'participants'
-});
-
-// Event - EventParticipation
-db.Event.hasMany(db.EventParticipation, {
-  foreignKey: 'eventId',
-  as: 'participations'
-});
-db.EventParticipation.belongsTo(db.Event, {
-  foreignKey: 'eventId',
-  as: 'event'
-});
-
-// User - EventParticipation
-db.User.hasMany(db.EventParticipation, {
-  foreignKey: 'userId',
-  as: 'participations'
-});
-db.EventParticipation.belongsTo(db.User, {
-  foreignKey: 'userId',
-  as: 'user'
-});
-
-// Event - ChatMessage
-db.Event.hasMany(db.ChatMessage, {
-  foreignKey: 'eventId',
-  as: 'chatMessages'
-});
-db.ChatMessage.belongsTo(db.Event, {
-  foreignKey: 'eventId',
-  as: 'event'
-});
-
-// User - ChatMessage
-db.User.hasMany(db.ChatMessage, {
-  foreignKey: 'userId',
-  as: 'messages'
-});
-db.ChatMessage.belongsTo(db.User, {
-  foreignKey: 'userId',
-  as: 'user'
-});
-
-db.sequelize = sequelize;
-db.Sequelize = Sequelize;
-
-module.exports = db;// backend/src/models/index.js
+// backend/src/models/index.js
 const { Sequelize } = require('sequelize');
 const config = require('../config/database');
 
+const env = process.env.NODE_ENV || 'development';
+const dbConfig = config[env];
+
 // Inizializza Sequelize
-// sequelize already declared above – skip re-declaration
+const sequelize = new Sequelize(
+  dbConfig.database,
+  dbConfig.username,
+  dbConfig.password,
+  dbConfig
+);
 
 // Importa i modelli
 const User = require('./User')(sequelize);
 const Event = require('./Event')(sequelize);
-// Participant already declared below; skip duplicate import
-// Message already declared below; skip duplicate import
-// MessageRead already declared below; skip duplicate import
-// Notification already declared below; skip duplicate import
-// Report already declared below; skip duplicate import
-const User = require('./user.model');
-const Event = require('./event.model');
-const TicketType = require('./ticket-type.model');
-const Ticket = require('./ticket.model');
-
-// User - Event associations
-User.hasMany(Event, { as: 'organizedEvents', foreignKey: 'organizerId' });
-Event.belongsTo(User, { as: 'organizer', foreignKey: 'organizerId' });
-
-// Event - TicketType associations
-Event.hasMany(TicketType, { as: 'ticketTypes' });
-TicketType.belongsTo(Event);
-
-// User - Ticket associations
-User.hasMany(Ticket);
-Ticket.belongsTo(User);
-
-// Event - Ticket associations
-Event.hasMany(Ticket);
-Ticket.belongsTo(Event);
-
-// TicketType - Ticket associations
-TicketType.hasMany(Ticket);
-Ticket.belongsTo(TicketType);
-
-module.exports = {
-    User,
-    Event,
-    TicketType,
-    Ticket
-};
 const Participant = require('./Participant')(sequelize);
 const Message = require('./Message')(sequelize);
 const MessageRead = require('./MessageRead')(sequelize);
@@ -165,7 +27,8 @@ const Report = require('./Report')(sequelize);
 // User <-> Event (Organizzatore)
 User.hasMany(Event, {
   foreignKey: 'organizerId',
-  as: 'organizedEvents'
+  as: 'organizedEvents',
+  onDelete: 'CASCADE'
 });
 Event.belongsTo(User, {
   foreignKey: 'organizerId',
@@ -186,7 +49,7 @@ Event.belongsToMany(User, {
   as: 'participants'
 });
 
-// Relazioni dirette con Participant per accesso facilitato
+// Relazioni dirette con Participant
 User.hasMany(Participant, {
   foreignKey: 'userId',
   as: 'participations'
@@ -225,7 +88,7 @@ Message.belongsTo(Event, {
   as: 'event'
 });
 
-// Message <-> User (Lettura messaggi) - Many to Many attraverso MessageRead
+// Message <-> User (Lettura) - Many to Many
 Message.belongsToMany(User, {
   through: MessageRead,
   foreignKey: 'messageId',
@@ -239,7 +102,7 @@ User.belongsToMany(Message, {
   as: 'readMessages'
 });
 
-// Relazioni dirette con MessageRead
+// Relazioni dirette MessageRead
 Message.hasMany(MessageRead, {
   foreignKey: 'messageId',
   as: 'reads'
@@ -318,7 +181,7 @@ Report.belongsTo(Event, {
   as: 'reportedEvent'
 });
 
-// Report <-> User (Reviewer/Admin)
+// Report <-> User (Reviewer)
 User.hasMany(Report, {
   foreignKey: 'reviewedById',
   as: 'reviewedReports'

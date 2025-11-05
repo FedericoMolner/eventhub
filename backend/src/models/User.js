@@ -94,7 +94,6 @@ module.exports = (sequelize) => {
     tableName: 'users',
     timestamps: true,
     hooks: {
-      // Hash password prima del salvataggio
       beforeCreate: async (user) => {
         if (user.password) {
           user.password = await bcrypt.hash(user.password, 12);
@@ -107,21 +106,19 @@ module.exports = (sequelize) => {
       }
     },
     defaultScope: {
-      attributes: { exclude: ['password'] }
+      attributes: { exclude: ['password', 'passwordResetToken', 'emailVerificationToken'] }
     },
     scopes: {
       withPassword: {
-        attributes: { include: ['password'] }
+        attributes: {}
       }
     }
   });
 
-  // Metodo per confrontare password
   User.prototype.comparePassword = async function(candidatePassword) {
     return await bcrypt.compare(candidatePassword, this.password);
   };
 
-  // Metodo per generare token di reset password
   User.prototype.createPasswordResetToken = function() {
     const resetToken = crypto.randomBytes(32).toString('hex');
     
@@ -130,17 +127,15 @@ module.exports = (sequelize) => {
       .update(resetToken)
       .digest('hex');
     
-    this.passwordResetExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minuti
+    this.passwordResetExpires = new Date(Date.now() + 10 * 60 * 1000);
     
     return resetToken;
   };
 
-  // Virtual per nome completo
   User.prototype.fullName = function() {
     return `${this.firstName} ${this.lastName}`;
   };
 
-  // Metodo per JSON sicuro (senza dati sensibili)
   User.prototype.toSafeJSON = function() {
     const values = { ...this.get() };
     delete values.password;
